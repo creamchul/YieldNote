@@ -332,6 +332,106 @@ else:
                 user_manager.save_user_stocks(st.session_state.username, st.session_state.stocks)
                 st.success(f"{removed_stock['종목명']} 종목이 삭제되었습니다.")
                 st.rerun()
+            
+            # 종목 수정 기능
+            st.subheader('종목 수정')
+            edit_options = [f"{i+1}. {stock['종목명']}" for i, stock in enumerate(st.session_state.stocks)]
+            
+            # 종목 선택 및 수정 준비
+            if 'editing_stock_idx' not in st.session_state:
+                st.session_state.editing_stock_idx = None
+            
+            edit_index = st.selectbox('수정할 종목 선택', options=edit_options, index=0)
+            select_idx = int(edit_index.split('.')[0]) - 1
+            
+            if st.button('종목 수정하기'):
+                st.session_state.editing_stock_idx = select_idx
+                st.rerun()
+            
+            # 선택한 종목 수정 폼 표시
+            if st.session_state.editing_stock_idx is not None:
+                idx = st.session_state.editing_stock_idx
+                stock = st.session_state.stocks[idx]
+                
+                with st.form('edit_stock_form'):
+                    st.subheader(f"'{stock['종목명']}' 종목 정보 수정")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        updated_name = st.text_input('종목명', value=stock['종목명'])
+                        updated_quantity = st.number_input('보유 수량', min_value=0, value=stock['보유 수량'], step=1)
+                        updated_purchase_price = st.number_input('매수 단가 (USD)', min_value=0.0, value=stock['매수 단가'], step=0.01)
+                    
+                    with col2:
+                        updated_current_price = st.number_input('현재 주가 (USD)', min_value=0.0, value=stock['현재 주가'], step=0.01)
+                        st.write(f"매수 단가 (KRW): ₩{updated_purchase_price * st.session_state.exchange_rate:,.0f}")
+                        st.write(f"현재 주가 (KRW): ₩{updated_current_price * st.session_state.exchange_rate:,.0f}")
+                    
+                    st.subheader('월별 배당금 (USD)')
+                    
+                    # 한 줄에 4개 열로 배치
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    updated_monthly_dividends = {}
+                    months = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
+                    
+                    for i, month in enumerate(months):
+                        with [col1, col2, col3, col4][i % 4]:
+                            default_value = stock['월별 배당금'].get(month, 0.0)
+                            updated_monthly_dividends[month] = st.number_input(
+                                month, 
+                                min_value=0.0,
+                                value=default_value,
+                                step=0.01,
+                                key=f"edit_dividend_{month}"
+                            )
+                    
+                    update_button = st.form_submit_button('수정 완료')
+                    cancel_button = st.form_submit_button('취소')
+                    
+                    if update_button:
+                        if not updated_name:
+                            st.error('종목명을 입력해주세요.')
+                        elif updated_quantity <= 0:
+                            st.error('보유 수량은 0보다 커야 합니다.')
+                        elif updated_purchase_price <= 0:
+                            st.error('매수 단가는 0보다 커야 합니다.')
+                        elif updated_current_price <= 0:
+                            st.error('현재 주가는 0보다 커야 합니다.')
+                        else:
+                            # 계산 수행
+                            total_investment = updated_quantity * updated_purchase_price
+                            current_value = updated_quantity * updated_current_price
+                            total_dividend = sum(updated_monthly_dividends.values())
+                            actual_profit_loss = current_value + total_dividend - total_investment
+                            profit_rate = (actual_profit_loss / total_investment * 100) if total_investment > 0 else 0
+                            
+                            # 종목 정보 업데이트
+                            updated_stock = {
+                                '종목명': updated_name,
+                                '보유 수량': updated_quantity,
+                                '매수 단가': updated_purchase_price,
+                                '현재 주가': updated_current_price,
+                                '총 투자금': total_investment,
+                                '현재 평가금': current_value,
+                                '누적 배당금': total_dividend,
+                                '실제 손익': actual_profit_loss,
+                                '수익률 (%)': profit_rate,
+                                '월별 배당금': updated_monthly_dividends
+                            }
+                            
+                            # 세션에 종목 업데이트
+                            st.session_state.stocks[idx] = updated_stock
+                            # 사용자 정보에 저장
+                            user_manager.save_user_stocks(st.session_state.username, st.session_state.stocks)
+                            st.success(f"{updated_name} 종목 정보가 업데이트되었습니다.")
+                            # 수정 모드 종료
+                            st.session_state.editing_stock_idx = None
+                            st.rerun()
+                    
+                    if cancel_button:
+                        st.session_state.editing_stock_idx = None
+                        st.rerun()
     
     # 상세 정보 탭
     with tab3:
