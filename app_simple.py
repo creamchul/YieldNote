@@ -362,11 +362,20 @@ else:
                     
                     with col1:
                         updated_name = st.text_input('종목명', value=stock['종목명'])
-                        updated_quantity = st.number_input('보유 수량', min_value=0.0, value=stock['보유 수량'], step=0.01)
-                        updated_purchase_price = st.number_input('매수 단가 (USD)', min_value=0.0, value=stock['매수 단가'], step=0.01)
+                        updated_quantity = st.number_input('보유 수량', 
+                                                        min_value=0.0, 
+                                                        value=float(stock['보유 수량']), 
+                                                        step=0.01)
+                        updated_purchase_price = st.number_input('매수 단가 (USD)', 
+                                                              min_value=0.0, 
+                                                              value=float(stock['매수 단가']), 
+                                                              step=0.01)
                     
                     with col2:
-                        updated_current_price = st.number_input('현재 주가 (USD)', min_value=0.0, value=stock['현재 주가'], step=0.01)
+                        updated_current_price = st.number_input('현재 주가 (USD)', 
+                                                             min_value=0.0, 
+                                                             value=float(stock['현재 주가']), 
+                                                             step=0.01)
                         st.write(f"매수 단가 (KRW): ₩{updated_purchase_price * st.session_state.exchange_rate:,.0f}")
                         st.write(f"현재 주가 (KRW): ₩{updated_current_price * st.session_state.exchange_rate:,.0f}")
                     
