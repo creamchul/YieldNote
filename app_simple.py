@@ -16,6 +16,9 @@ if 'username' not in st.session_state:
     st.session_state.username = None
 if 'name' not in st.session_state:
     st.session_state.name = None
+# 환율 상태 초기화
+if 'exchange_rate' not in st.session_state:
+    st.session_state.exchange_rate = 1350.0  # 기본 환율 설정
 
 # 로그인 섹션
 if not st.session_state.authenticated:
@@ -43,6 +46,18 @@ else:
     
     st.write('종목별 투자 정보와 월별 배당금을 입력하여 손익을 계산해보세요.')
     
+    # 환율 설정
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.session_state.exchange_rate = st.number_input('달러-원 환율 설정', 
+                                                        min_value=800.0, 
+                                                        max_value=2000.0, 
+                                                        value=st.session_state.exchange_rate, 
+                                                        step=0.1, 
+                                                        format="%.1f")
+    with col2:
+        st.info(f"1 USD = {st.session_state.exchange_rate:.1f} KRW")
+    
     # 세션 상태 초기화
     if 'stocks' not in st.session_state:
         # 사용자의 저장된 종목 정보 로드
@@ -65,17 +80,30 @@ else:
             total_profit_loss = sum(stock['실제 손익'] for stock in st.session_state.stocks)
             total_profit_rate = (total_profit_loss / total_investment * 100) if total_investment > 0 else 0
             
+            # 원화로 환산
+            total_investment_krw = total_investment * st.session_state.exchange_rate
+            total_current_value_krw = total_current_value * st.session_state.exchange_rate
+            total_dividend_krw = total_dividend * st.session_state.exchange_rate
+            total_profit_loss_krw = total_profit_loss * st.session_state.exchange_rate
+            
             # 주요 지표 표시 (표 형태로)
             st.markdown("### 📈 주요 지표")
             
             summary_data = {
                 '항목': ['총 투자금', '총 평가금', '총 배당금', '총 손익', '총 수익률'],
-                '금액': [
-                    f"{total_investment:,.2f}원",
-                    f"{total_current_value:,.2f}원",
-                    f"{total_dividend:,.2f}원",
-                    f"{total_profit_loss:,.2f}원",
+                'USD': [
+                    f"${total_investment:,.2f}",
+                    f"${total_current_value:,.2f}",
+                    f"${total_dividend:,.2f}",
+                    f"${total_profit_loss:,.2f}",
                     f"{total_profit_rate:,.2f}%"
+                ],
+                'KRW': [
+                    f"₩{total_investment_krw:,.0f}",
+                    f"₩{total_current_value_krw:,.0f}",
+                    f"₩{total_dividend_krw:,.0f}",
+                    f"₩{total_profit_loss_krw:,.0f}",
+                    f"{total_profit_rate:,.2f}%"  # 수익률은 % 단위로 동일
                 ]
             }
             summary_df = pd.DataFrame(summary_data)
@@ -88,12 +116,22 @@ else:
             
             profit_data = []
             for stock in st.session_state.stocks:
+                # 원화로 환산
+                investment_krw = stock['총 투자금'] * st.session_state.exchange_rate
+                value_krw = stock['현재 평가금'] * st.session_state.exchange_rate
+                dividend_krw = stock['누적 배당금'] * st.session_state.exchange_rate
+                profit_loss_krw = stock['실제 손익'] * st.session_state.exchange_rate
+                
                 profit_data.append({
                     '종목명': stock['종목명'],
-                    '투자금': f"{stock['총 투자금']:,.2f}원",
-                    '평가금': f"{stock['현재 평가금']:,.2f}원",
-                    '배당금': f"{stock['누적 배당금']:,.2f}원",
-                    '수익/손실': f"{stock['실제 손익']:,.2f}원",
+                    '투자금 (USD)': f"${stock['총 투자금']:,.2f}",
+                    '투자금 (KRW)': f"₩{investment_krw:,.0f}",
+                    '평가금 (USD)': f"${stock['현재 평가금']:,.2f}",
+                    '평가금 (KRW)': f"₩{value_krw:,.0f}",
+                    '배당금 (USD)': f"${stock['누적 배당금']:,.2f}",
+                    '배당금 (KRW)': f"₩{dividend_krw:,.0f}",
+                    '수익/손실 (USD)': f"${stock['실제 손익']:,.2f}",
+                    '수익/손실 (KRW)': f"₩{profit_loss_krw:,.0f}",
                     '수익률': f"{stock['수익률 (%)']:,.2f}%"
                 })
             
@@ -101,7 +139,20 @@ else:
             # 수익률 기준으로 내림차순 정렬
             profit_df['수익률_정렬용'] = [stock['수익률 (%)'] for stock in st.session_state.stocks]
             profit_df = profit_df.sort_values('수익률_정렬용', ascending=False).drop('수익률_정렬용', axis=1)
-            st.table(profit_df)
+            
+            # USD/KRW 보기 선택 옵션
+            currency_view = st.radio("통화 표시 방식", ["모두 표시", "USD만 표시", "KRW만 표시"], horizontal=True)
+            
+            if currency_view == "USD만 표시":
+                columns_to_show = ['종목명', '투자금 (USD)', '평가금 (USD)', '배당금 (USD)', '수익/손실 (USD)', '수익률']
+                profit_df_view = profit_df[columns_to_show]
+            elif currency_view == "KRW만 표시":
+                columns_to_show = ['종목명', '투자금 (KRW)', '평가금 (KRW)', '배당금 (KRW)', '수익/손실 (KRW)', '수익률']
+                profit_df_view = profit_df[columns_to_show]
+            else:
+                profit_df_view = profit_df
+            
+            st.table(profit_df_view)
             
             st.markdown("---")
             
@@ -114,11 +165,17 @@ else:
                 invest_pct = (stock['총 투자금'] / total_investment * 100) if total_investment > 0 else 0
                 value_pct = (stock['현재 평가금'] / total_current_value * 100) if total_current_value > 0 else 0
                 
+                # 원화로 환산
+                investment_krw = stock['총 투자금'] * st.session_state.exchange_rate
+                value_krw = stock['현재 평가금'] * st.session_state.exchange_rate
+                
                 composition_data.append({
                     '종목명': stock['종목명'],
-                    '투자금': f"{stock['총 투자금']:,.2f}원",
+                    '투자금 (USD)': f"${stock['총 투자금']:,.2f}",
+                    '투자금 (KRW)': f"₩{investment_krw:,.0f}",
                     '투자 비중': f"{invest_pct:.2f}%",
-                    '평가금': f"{stock['현재 평가금']:,.2f}원",
+                    '평가금 (USD)': f"${stock['현재 평가금']:,.2f}",
+                    '평가금 (KRW)': f"₩{value_krw:,.0f}",
                     '평가 비중': f"{value_pct:.2f}%"
                 })
             
@@ -127,7 +184,18 @@ else:
             composition_df['투자비중_정렬용'] = [(stock['총 투자금'] / total_investment * 100) if total_investment > 0 else 0 
                                         for stock in st.session_state.stocks]
             composition_df = composition_df.sort_values('투자비중_정렬용', ascending=False).drop('투자비중_정렬용', axis=1)
-            st.table(composition_df)
+            
+            # USD/KRW 보기 선택 옵션에 따라 표시
+            if currency_view == "USD만 표시":
+                columns_to_show = ['종목명', '투자금 (USD)', '투자 비중', '평가금 (USD)', '평가 비중']
+                composition_df_view = composition_df[columns_to_show]
+            elif currency_view == "KRW만 표시":
+                columns_to_show = ['종목명', '투자금 (KRW)', '투자 비중', '평가금 (KRW)', '평가 비중']
+                composition_df_view = composition_df[columns_to_show]
+            else:
+                composition_df_view = composition_df
+                
+            st.table(composition_df_view)
             
             st.markdown("---")
             
@@ -143,7 +211,8 @@ else:
             
             monthly_data = {
                 '월': list(monthly_sums.keys()),
-                '배당금': [f"{amount:,.2f}원" for amount in monthly_sums.values()]
+                '배당금 (USD)': [f"${amount:,.2f}" for amount in monthly_sums.values()],
+                '배당금 (KRW)': [f"₩{amount * st.session_state.exchange_rate:,.0f}" for amount in monthly_sums.values()]
             }
             monthly_df = pd.DataFrame(monthly_data)
             
@@ -152,7 +221,17 @@ else:
             monthly_df_filtered = monthly_df[monthly_df['배당금_정렬용'] > 0].drop('배당금_정렬용', axis=1)
             
             if not monthly_df_filtered.empty:
-                st.table(monthly_df_filtered)
+                # USD/KRW 보기 선택 옵션에 따라 표시
+                if currency_view == "USD만 표시":
+                    columns_to_show = ['월', '배당금 (USD)']
+                    monthly_df_view = monthly_df_filtered[columns_to_show]
+                elif currency_view == "KRW만 표시":
+                    columns_to_show = ['월', '배당금 (KRW)']
+                    monthly_df_view = monthly_df_filtered[columns_to_show]
+                else:
+                    monthly_df_view = monthly_df_filtered
+                    
+                st.table(monthly_df_view)
                 
                 # 배당금 흐름 요약 텍스트
                 max_month = monthly_df.loc[monthly_df['배당금_정렬용'].idxmax(), '월']
@@ -160,9 +239,9 @@ else:
                 annual_dividend = sum(monthly_sums.values())
                 
                 st.markdown(f"**배당금 요약:**")
-                st.markdown(f"- 연간 총 배당금: **{annual_dividend:,.2f}원**")
-                st.markdown(f"- 배당금이 가장 많은 달: **{max_month}** ({max_amount:,.2f}원)")
-                st.markdown(f"- 월 평균 배당금: **{(annual_dividend/12):,.2f}원**")
+                st.markdown(f"- 연간 총 배당금: **${annual_dividend:,.2f}** (₩{annual_dividend * st.session_state.exchange_rate:,.0f})")
+                st.markdown(f"- 배당금이 가장 많은 달: **{max_month}** (${max_amount:,.2f} / ₩{max_amount * st.session_state.exchange_rate:,.0f})")
+                st.markdown(f"- 월 평균 배당금: **${(annual_dividend/12):,.2f}** (₩{(annual_dividend/12) * st.session_state.exchange_rate:,.0f})")
             else:
                 st.info("아직 입력된 배당금이 없습니다.")
     
@@ -176,12 +255,14 @@ else:
             with col1:
                 stock_name = st.text_input('종목명', placeholder='예: 리얼티인컴')
                 quantity = st.number_input('보유 수량', min_value=0, value=0, step=1)
-                purchase_price = st.number_input('매수 단가', min_value=0.0, value=0.0, step=0.01)
+                purchase_price = st.number_input('매수 단가 (USD)', min_value=0.0, value=0.0, step=0.01)
             
             with col2:
-                current_price = st.number_input('현재 주가', min_value=0.0, value=0.0, step=0.01)
+                current_price = st.number_input('현재 주가 (USD)', min_value=0.0, value=0.0, step=0.01)
+                st.write(f"매수 단가 (KRW): ₩{purchase_price * st.session_state.exchange_rate:,.0f}")
+                st.write(f"현재 주가 (KRW): ₩{current_price * st.session_state.exchange_rate:,.0f}")
             
-            st.subheader('월별 배당금')
+            st.subheader('월별 배당금 (USD)')
             
             # 한 줄에 4개 열로 배치
             col1, col2, col3, col4 = st.columns(4)
@@ -256,22 +337,64 @@ else:
     with tab3:
         # 종목별 결과 테이블 표시
         if st.session_state.stocks:
+            # USD/KRW 보기 선택 옵션
+            currency_view_detail = st.radio("통화 표시 방식 (상세)", ["모두 표시", "USD만 표시", "KRW만 표시"], horizontal=True)
+            
             st.subheader('종목별 손익 현황')
             
             # 테이블용 데이터 준비
             table_data = []
             for stock in st.session_state.stocks:
-                row = {
-                    '종목명': stock['종목명'],
-                    '보유 수량': stock['보유 수량'],
-                    '매수 단가': f"{stock['매수 단가']:,.2f}",
-                    '현재 주가': f"{stock['현재 주가']:,.2f}",
-                    '총 투자금': f"{stock['총 투자금']:,.2f}",
-                    '현재 평가금': f"{stock['현재 평가금']:,.2f}",
-                    '누적 배당금': f"{stock['누적 배당금']:,.2f}",
-                    '실제 손익': f"{stock['실제 손익']:,.2f}",
-                    '수익률 (%)': f"{stock['수익률 (%)']:,.2f}%"
-                }
+                # 원화로 환산
+                purchase_price_krw = stock['매수 단가'] * st.session_state.exchange_rate
+                current_price_krw = stock['현재 주가'] * st.session_state.exchange_rate
+                total_investment_krw = stock['총 투자금'] * st.session_state.exchange_rate
+                current_value_krw = stock['현재 평가금'] * st.session_state.exchange_rate
+                total_dividend_krw = stock['누적 배당금'] * st.session_state.exchange_rate
+                actual_profit_loss_krw = stock['실제 손익'] * st.session_state.exchange_rate
+                
+                if currency_view_detail == "USD만 표시":
+                    row = {
+                        '종목명': stock['종목명'],
+                        '보유 수량': stock['보유 수량'],
+                        '매수 단가': f"${stock['매수 단가']:,.2f}",
+                        '현재 주가': f"${stock['현재 주가']:,.2f}",
+                        '총 투자금': f"${stock['총 투자금']:,.2f}",
+                        '현재 평가금': f"${stock['현재 평가금']:,.2f}",
+                        '누적 배당금': f"${stock['누적 배당금']:,.2f}",
+                        '실제 손익': f"${stock['실제 손익']:,.2f}",
+                        '수익률 (%)': f"{stock['수익률 (%)']:,.2f}%"
+                    }
+                elif currency_view_detail == "KRW만 표시":
+                    row = {
+                        '종목명': stock['종목명'],
+                        '보유 수량': stock['보유 수량'],
+                        '매수 단가': f"₩{purchase_price_krw:,.0f}",
+                        '현재 주가': f"₩{current_price_krw:,.0f}",
+                        '총 투자금': f"₩{total_investment_krw:,.0f}",
+                        '현재 평가금': f"₩{current_value_krw:,.0f}",
+                        '누적 배당금': f"₩{total_dividend_krw:,.0f}",
+                        '실제 손익': f"₩{actual_profit_loss_krw:,.0f}",
+                        '수익률 (%)': f"{stock['수익률 (%)']:,.2f}%"
+                    }
+                else:
+                    row = {
+                        '종목명': stock['종목명'],
+                        '보유 수량': stock['보유 수량'],
+                        '매수 단가 (USD)': f"${stock['매수 단가']:,.2f}",
+                        '매수 단가 (KRW)': f"₩{purchase_price_krw:,.0f}",
+                        '현재 주가 (USD)': f"${stock['현재 주가']:,.2f}",
+                        '현재 주가 (KRW)': f"₩{current_price_krw:,.0f}",
+                        '총 투자금 (USD)': f"${stock['총 투자금']:,.2f}",
+                        '총 투자금 (KRW)': f"₩{total_investment_krw:,.0f}",
+                        '현재 평가금 (USD)': f"${stock['현재 평가금']:,.2f}",
+                        '현재 평가금 (KRW)': f"₩{current_value_krw:,.0f}",
+                        '누적 배당금 (USD)': f"${stock['누적 배당금']:,.2f}",
+                        '누적 배당금 (KRW)': f"₩{total_dividend_krw:,.0f}",
+                        '실제 손익 (USD)': f"${stock['실제 손익']:,.2f}",
+                        '실제 손익 (KRW)': f"₩{actual_profit_loss_krw:,.0f}",
+                        '수익률 (%)': f"{stock['수익률 (%)']:,.2f}%"
+                    }
                 table_data.append(row)
             
             # 데이터프레임 생성 및 표시
@@ -285,18 +408,56 @@ else:
             total_profit_loss = sum(stock['실제 손익'] for stock in st.session_state.stocks)
             total_profit_rate = (total_profit_loss / total_investment * 100) if total_investment > 0 else 0
             
+            # 원화로 환산
+            total_investment_krw = total_investment * st.session_state.exchange_rate
+            total_current_value_krw = total_current_value * st.session_state.exchange_rate
+            total_dividend_krw = total_dividend * st.session_state.exchange_rate
+            total_profit_loss_krw = total_profit_loss * st.session_state.exchange_rate
+            
             # 합계 테이블 표시
             st.subheader('전체 합계')
-            summary_data = {
-                '항목': ['총 투자금', '총 평가금', '총 누적 배당금', '총 손익', '총 수익률'],
-                '금액': [
-                    f"{total_investment:,.2f}",
-                    f"{total_current_value:,.2f}",
-                    f"{total_dividend:,.2f}",
-                    f"{total_profit_loss:,.2f}",
-                    f"{total_profit_rate:,.2f}%"
-                ]
-            }
+            
+            if currency_view_detail == "USD만 표시":
+                summary_data = {
+                    '항목': ['총 투자금', '총 평가금', '총 누적 배당금', '총 손익', '총 수익률'],
+                    '금액': [
+                        f"${total_investment:,.2f}",
+                        f"${total_current_value:,.2f}",
+                        f"${total_dividend:,.2f}",
+                        f"${total_profit_loss:,.2f}",
+                        f"{total_profit_rate:,.2f}%"
+                    ]
+                }
+            elif currency_view_detail == "KRW만 표시":
+                summary_data = {
+                    '항목': ['총 투자금', '총 평가금', '총 누적 배당금', '총 손익', '총 수익률'],
+                    '금액': [
+                        f"₩{total_investment_krw:,.0f}",
+                        f"₩{total_current_value_krw:,.0f}",
+                        f"₩{total_dividend_krw:,.0f}",
+                        f"₩{total_profit_loss_krw:,.0f}",
+                        f"{total_profit_rate:,.2f}%"
+                    ]
+                }
+            else:
+                summary_data = {
+                    '항목': ['총 투자금', '총 평가금', '총 누적 배당금', '총 손익', '총 수익률'],
+                    'USD': [
+                        f"${total_investment:,.2f}",
+                        f"${total_current_value:,.2f}",
+                        f"${total_dividend:,.2f}",
+                        f"${total_profit_loss:,.2f}",
+                        f"{total_profit_rate:,.2f}%"
+                    ],
+                    'KRW': [
+                        f"₩{total_investment_krw:,.0f}",
+                        f"₩{total_current_value_krw:,.0f}",
+                        f"₩{total_dividend_krw:,.0f}",
+                        f"₩{total_profit_loss_krw:,.0f}",
+                        f"{total_profit_rate:,.2f}%"
+                    ]
+                }
+            
             summary_df = pd.DataFrame(summary_data)
             st.table(summary_df)
             
@@ -310,17 +471,39 @@ else:
                 filtered_months = {month: amount for month, amount in stock['월별 배당금'].items() if amount > 0}
                 
                 if filtered_months:
-                    monthly_data = {
-                        '월': list(filtered_months.keys()),
-                        '배당금': [f"{amount:,.2f}원" for amount in filtered_months.values()]
-                    }
+                    if currency_view_detail == "USD만 표시":
+                        monthly_data = {
+                            '월': list(filtered_months.keys()),
+                            '배당금 (USD)': [f"${amount:,.2f}" for amount in filtered_months.values()]
+                        }
+                    elif currency_view_detail == "KRW만 표시":
+                        monthly_data = {
+                            '월': list(filtered_months.keys()),
+                            '배당금 (KRW)': [f"₩{amount * st.session_state.exchange_rate:,.0f}" for amount in filtered_months.values()]
+                        }
+                    else:
+                        monthly_data = {
+                            '월': list(filtered_months.keys()),
+                            '배당금 (USD)': [f"${amount:,.2f}" for amount in filtered_months.values()],
+                            '배당금 (KRW)': [f"₩{amount * st.session_state.exchange_rate:,.0f}" for amount in filtered_months.values()]
+                        }
+                    
                     monthly_df = pd.DataFrame(monthly_data)
                     st.table(monthly_df)
                     
                     # 배당금 요약 정보
                     total_stock_dividend = sum(stock['월별 배당금'].values())
-                    st.markdown(f"- 연간 총 배당금: **{total_stock_dividend:,.2f}원**")
-                    st.markdown(f"- 배당 수익률: **{(total_stock_dividend / stock['총 투자금'] * 100):,.2f}%** (배당금 ÷ 투자금)")
+                    total_stock_dividend_krw = total_stock_dividend * st.session_state.exchange_rate
+                    dividend_yield = (total_stock_dividend / stock['총 투자금'] * 100) if stock['총 투자금'] > 0 else 0
+                    
+                    if currency_view_detail == "USD만 표시":
+                        st.markdown(f"- 연간 총 배당금: **${total_stock_dividend:,.2f}**")
+                    elif currency_view_detail == "KRW만 표시":
+                        st.markdown(f"- 연간 총 배당금: **₩{total_stock_dividend_krw:,.0f}**")
+                    else:
+                        st.markdown(f"- 연간 총 배당금: **${total_stock_dividend:,.2f}** (₩{total_stock_dividend_krw:,.0f})")
+                    
+                    st.markdown(f"- 배당 수익률: **{dividend_yield:,.2f}%** (배당금 ÷ 투자금)")
                 else:
                     st.info(f"{stock['종목명']}의 배당금 데이터가 없습니다.")
                 
