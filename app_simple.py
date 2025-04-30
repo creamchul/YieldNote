@@ -62,6 +62,9 @@ else:
     if 'stocks' not in st.session_state:
         # 사용자의 저장된 종목 정보 로드
         st.session_state.stocks = user_manager.get_user_stocks(st.session_state.username)
+        # 기존 데이터의 보유 수량을 실수형으로 변환
+        for stock in st.session_state.stocks:
+            stock['보유 수량'] = float(stock['보유 수량'])
     
     # 메뉴 탭 추가
     tab1, tab2, tab3 = st.tabs(["📊 대시보드", "➕ 종목 관리", "📋 상세 정보"])
