@@ -254,7 +254,7 @@ else:
             
             with col1:
                 stock_name = st.text_input('종목명', placeholder='예: 리얼티인컴')
-                quantity = st.number_input('보유 수량', min_value=0, value=0, step=1)
+                quantity = st.number_input('보유 수량', min_value=0.0, value=0.0, step=0.01)
                 purchase_price = st.number_input('매수 단가 (USD)', min_value=0.0, value=0.0, step=0.01)
             
             with col2:
@@ -359,7 +359,7 @@ else:
                     
                     with col1:
                         updated_name = st.text_input('종목명', value=stock['종목명'])
-                        updated_quantity = st.number_input('보유 수량', min_value=0, value=stock['보유 수량'], step=1)
+                        updated_quantity = st.number_input('보유 수량', min_value=0.0, value=stock['보유 수량'], step=0.01)
                         updated_purchase_price = st.number_input('매수 단가 (USD)', min_value=0.0, value=stock['매수 단가'], step=0.01)
                     
                     with col2:
