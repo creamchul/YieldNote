@@ -2,12 +2,18 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from simple_auth import SimpleUserManager, login_user, logout_user, register_form
+import os
 
 # 사용자 관리자 생성
 user_manager = SimpleUserManager()
 
 # 앱 제목 설정
 st.title('배당 손익 계산기')
+
+# 추가: 앱 로드 시 데이터 파일 존재 여부 확인
+if not os.path.exists('./users.json'):
+    st.warning("사용자 데이터 파일이 누락되었습니다. 백업에서 복원을 시도합니다.")
+    # SimpleUserManager 초기화 과정에서 자동으로 복원 시도
 
 # 인증 관련 상태 초기화
 if 'authenticated' not in st.session_state:
@@ -65,6 +71,12 @@ else:
         # 기존 데이터의 보유 수량을 실수형으로 변환
         for stock in st.session_state.stocks:
             stock['보유 수량'] = float(stock['보유 수량'])
+    
+    # 데이터 백업 기능 (수동)
+    with st.expander("데이터 관리"):
+        if st.button("데이터 백업 생성"):
+            user_manager._backup_config()
+            st.success("데이터 백업이 생성되었습니다.")
     
     # 메뉴 탭 추가
     tab1, tab2, tab3 = st.tabs(["📊 대시보드", "➕ 종목 관리", "📋 상세 정보"])
@@ -319,8 +331,11 @@ else:
                     # 세션에 종목 추가
                     st.session_state.stocks.append(stock_info)
                     # 사용자 정보에 저장
-                    user_manager.save_user_stocks(st.session_state.username, st.session_state.stocks)
-                    st.success(f"{stock_name} 종목이 추가되었습니다.")
+                    success = user_manager.save_user_stocks(st.session_state.username, st.session_state.stocks)
+                    if success:
+                        st.success(f"{stock_name} 종목이 추가되었습니다.")
+                    else:
+                        st.error("종목 추가 중 오류가 발생했습니다. 다시 시도해주세요.")
         
         # 종목 삭제 기능
         if st.session_state.stocks:
@@ -332,8 +347,11 @@ else:
                 idx = int(delete_index.split('.')[0]) - 1
                 removed_stock = st.session_state.stocks.pop(idx)
                 # 사용자 정보에 저장
-                user_manager.save_user_stocks(st.session_state.username, st.session_state.stocks)
-                st.success(f"{removed_stock['종목명']} 종목이 삭제되었습니다.")
+                success = user_manager.save_user_stocks(st.session_state.username, st.session_state.stocks)
+                if success:
+                    st.success(f"{removed_stock['종목명']} 종목이 삭제되었습니다.")
+                else:
+                    st.error("종목 삭제 중 오류가 발생했습니다. 다시 시도해주세요.")
                 st.rerun()
             
             # 종목 수정 기능
@@ -435,8 +453,11 @@ else:
                             # 세션에 종목 업데이트
                             st.session_state.stocks[idx] = updated_stock
                             # 사용자 정보에 저장
-                            user_manager.save_user_stocks(st.session_state.username, st.session_state.stocks)
-                            st.success(f"{updated_name} 종목 정보가 업데이트되었습니다.")
+                            success = user_manager.save_user_stocks(st.session_state.username, st.session_state.stocks)
+                            if success:
+                                st.success(f"{updated_name} 종목 정보가 업데이트되었습니다.")
+                            else:
+                                st.error("종목 정보 업데이트 중 오류가 발생했습니다. 다시 시도해주세요.")
                             # 수정 모드 종료
                             st.session_state.editing_stock_idx = None
                             st.rerun()
